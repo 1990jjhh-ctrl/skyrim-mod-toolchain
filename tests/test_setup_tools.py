@@ -129,6 +129,13 @@ class SetupToolsTest(ScriptCase):
         self.assertEqual(len(self.calls("curl")), 1)
         self.assertEqual(self.stamp.read_text(), "x\n")
 
+    def test_llvm_mingw_bin_at_managed_dir_is_reinstalled(self):
+        compiler = self.install_compiler(version="old")
+        result = self.step("install_llvm_mingw", env={"LLVM_MINGW_BIN": str(compiler.parent)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.calls("curl")), 1)
+        self.assertEqual(self.stamp.read_text(), "x\n")
+
     def test_valid_llvm_mingw_bin_used(self):
         bin_dir = self.tmp / "mingw" / "bin"
         bin_dir.mkdir(parents=True)

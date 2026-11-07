@@ -14,6 +14,10 @@ TOOLCHAIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${TOOLCHAIN_VERSIONS_FILE:-$TOOLCHAIN_ROOT/versions.env}"
 
 LLVM_PREFIX="${SETUP_LLVM_PREFIX:-/usr/bin}"
+# Default install locations, used by the install steps and print_env.
+XWIN_BIN_DEFAULT="$HOME/.local/bin/xwin"
+SYSROOT_DEFAULT="$HOME/xwin-out"
+VCPKG_MANAGED="$HOME/.local/share/vcpkg"
 INSTALL=0
 NATIVE_TESTS=0
 CHECK_ONLY=0
@@ -113,8 +117,9 @@ install_llvm_mingw() {
 	echo "== 2. llvm-mingw"
 	local compiler=x86_64-w64-mingw32-clang++
 	local target="$HOME/.local/opt/llvm-mingw"
+	# The user's own llvm-mingw is never modified; one at the managed location is.
 	# A set but invalid override is an error, never a fallback.
-	if [[ -n "${LLVM_MINGW_BIN:-}" ]]; then
+	if [[ -n "${LLVM_MINGW_BIN:-}" ]] && ! same_directory "$LLVM_MINGW_BIN" "$target/bin"; then
 		if [[ ! -x "$LLVM_MINGW_BIN/$compiler" ]]; then
 			echo "LLVM_MINGW_BIN=$LLVM_MINGW_BIN has no $compiler; fix or unset it." >&2
 			exit 1
@@ -152,15 +157,22 @@ xwin_is_pinned() {
 	[[ "$("$1" --version 2>/dev/null)" == "xwin $XWIN_VERSION" ]]
 }
 
+# Prints the path of the pinned xwin (the install location first, then PATH).
+find_pinned_xwin() {
+	if xwin_is_pinned "$XWIN_BIN_DEFAULT"; then
+		echo "$XWIN_BIN_DEFAULT"
+	elif need xwin && xwin_is_pinned xwin; then
+		command -v xwin
+	else
+		return 1
+	fi
+}
+
 install_xwin() {
 	echo "== 3. xwin"
-	local target="$HOME/.local/bin/xwin"
-	if xwin_is_pinned "$target"; then
-		echo "Found $target"
-		return 0
-	fi
-	if need xwin && xwin_is_pinned xwin; then
-		echo "Found $(command -v xwin)"
+	local target="$XWIN_BIN_DEFAULT" found
+	if found="$(find_pinned_xwin)"; then
+		echo "Found $found"
 		return 0
 	fi
 
@@ -176,15 +188,104 @@ install_xwin() {
 	echo "Installed $target"
 }
 
-# Placeholders, replaced by the install steps.
-not_implemented() {
-	echo "$1: not implemented yet" >&2
-	return 1
+install_sysroot() {
+	echo "== 4. Windows SDK and MSVC CRT sysroot"
+	local out="${XWIN_SYSROOT:-$SYSROOT_DEFAULT}"
+	# Written after a successful splat, so an interrupted one is redone. A newer
+	# xwin does not re-splat a stamped sysroot; delete the stamp to force it.
+	local stamp="$out/.splat-complete"
+	if [[ -f "$stamp" ]]; then
+		echo "Found $out"
+		return 0
+	fi
+	local xwin
+	if ! xwin="$(find_pinned_xwin)"; then
+		echo "No xwin $XWIN_VERSION found; run install_xwin first." >&2
+		exit 1
+	fi
+	mkdir -p "$HOME/xwin-cache"
+	echo "Downloading the MSVC CRT and Windows SDK. You accept Microsoft's license by continuing."
+	"$xwin" --accept-license --http-retry 10 --cache-dir "$HOME/xwin-cache" splat \
+		--output "$out" --include-debug-libs \
+		--use-winsysroot-style --preserve-ms-arch-notation
+	: >"$stamp"
 }
-install_sysroot() { not_implemented install_sysroot; }
-install_vcpkg() { not_implemented install_vcpkg; }
-init_submodules() { not_implemented init_submodules; }
-print_env() { not_implemented print_env; }
+
+vcpkg_baseline() {
+	python3 -I -c '
+import json
+import sys
+
+with open(sys.argv[1]) as config:
+    print(json.load(config)["default-registry"]["baseline"])
+' "${TOOLCHAIN_VCPKG_CONFIG:-$TOOLCHAIN_ROOT/vcpkg-configuration.json}"
+}
+
+# same_directory <a> <b>: true when both are the same existing directory or the same path.
+same_directory() {
+	[[ "$1" == "$2" ]] && return 0
+	[[ -d "$1" && -d "$2" ]] || return 1
+	[[ "$(cd "$1" && pwd -P)" == "$(cd "$2" && pwd -P)" ]]
+}
+
+install_vcpkg() {
+	echo "== 5. vcpkg"
+	local baseline
+	baseline="$(vcpkg_baseline)"
+	# The user's own vcpkg is never modified; the managed one is.
+	if [[ -n "${VCPKG_ROOT:-}" ]] && ! same_directory "$VCPKG_ROOT" "$VCPKG_MANAGED"; then
+		if [[ ! -x "$VCPKG_ROOT/vcpkg" ]]; then
+			echo "VCPKG_ROOT=$VCPKG_ROOT has no bootstrapped vcpkg; fix or unset it." >&2
+			exit 1
+		fi
+		local head
+		head="$(git -C "$VCPKG_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+		if [[ "$head" != "$baseline" ]]; then
+			echo "Warning: VCPKG_ROOT is at $head, not the baseline $baseline; left unchanged." >&2
+		fi
+		echo "Using VCPKG_ROOT=$VCPKG_ROOT"
+		return 0
+	fi
+
+	local dir="$VCPKG_MANAGED"
+	local url="${VCPKG_GIT_URL:-https://github.com/microsoft/vcpkg}"
+	if [[ ! -d "$dir/.git" ]]; then
+		mkdir -p "$(dirname "$dir")"
+		git clone --no-checkout "$url" "$dir"
+	fi
+	if ! git -C "$dir" cat-file -e "$baseline^{commit}" 2>/dev/null; then
+		git -C "$dir" remote get-url origin >/dev/null 2>&1 || git -C "$dir" remote add origin "$url"
+		git -C "$dir" fetch origin
+	fi
+	local changed=0
+	# A --no-checkout clone can sit at the baseline with an empty tree.
+	if [[ "$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)" != "$baseline" ||
+		! -f "$dir/bootstrap-vcpkg.sh" ]]; then
+		git -C "$dir" checkout --detach "$baseline"
+		changed=1
+	fi
+	if ((changed)) || [[ ! -x "$dir/vcpkg" ]]; then
+		"$dir/bootstrap-vcpkg.sh" -disableMetrics
+	else
+		echo "Found $dir at the baseline"
+	fi
+}
+
+init_submodules() {
+	echo "== 6. Submodules"
+	git -C "$TOOLCHAIN_ROOT" submodule update --init --recursive
+}
+
+print_env() {
+	cat <<EOF
+
+Setup done. Add to your shell profile:
+  export VCPKG_ROOT="${VCPKG_ROOT:-$VCPKG_MANAGED}"
+  export XWIN_SYSROOT="${XWIN_SYSROOT:-$SYSROOT_DEFAULT}"
+  export LLVM_MINGW_BIN="${LLVM_MINGW_BIN:-$HOME/.local/opt/llvm-mingw/bin}"
+  export PATH="\$HOME/.local/bin:\$PATH"
+EOF
+}
 
 main() {
 	while (($#)); do
