@@ -1,0 +1,92 @@
+# Installs and caches the cross-compile toolchain for a project that vendors
+# this repository as a submodule. All locations, keys and versions come from
+# scripts/setup.sh; this file only wires them to the caches.
+name: Set up the SKSE cross-compile toolchain
+description: Installs the llvm-mingw, xwin, Windows sysroot and vcpkg toolchain and exports its environment.
+
+inputs:
+  source-dir:
+    description: The project's CMake source directory, relative to the workspace (where vcpkg.json lives).
+    default: "."
+  native-tests:
+    description: 'Set to "true" to also install the native C++ compiler for host-side tests.'
+    default: "false"
+
+outputs:
+  vcpkg-root:
+    description: The vcpkg checkout.
+    value: ${{ steps.locations.outputs.vcpkg_root }}
+  sysroot:
+    description: The xwin Windows sysroot.
+    value: ${{ steps.locations.outputs.sysroot }}
+  llvm-mingw-bin:
+    description: The llvm-mingw bin directory.
+    value: ${{ steps.locations.outputs.llvm_mingw_bin }}
+
+runs:
+  using: composite
+  steps:
+    - id: locations
+      shell: bash
+      env:
+        SOURCE_DIR: ${{ inputs.source-dir }}
+      run: |
+        set -euo pipefail
+        "$GITHUB_ACTION_PATH/../../../scripts/setup.sh" --print-locations >> "$GITHUB_OUTPUT"
+        # Everything that decides which vcpkg packages get built.
+        vcpkg_inputs="$(cat "$GITHUB_WORKSPACE/$SOURCE_DIR/vcpkg.json" "$GITHUB_ACTION_PATH"/../../../cmake/triplets/*.cmake | sha256sum)"
+        echo "vcpkg_key=${vcpkg_inputs%% *}" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@v6
+      with:
+        path: |
+          ${{ steps.locations.outputs.llvm_mingw }}
+          ${{ steps.locations.outputs.xwin_bin }}
+        key: skse-tools-${{ steps.locations.outputs.tools_key }}
+
+    # xwin's download cache is not saved: the splat output is what the build
+    # needs, and the cache only feeds a re-splat.
+    - uses: actions/cache@v6
+      with:
+        path: ${{ steps.locations.outputs.sysroot }}
+        key: skse-sysroot-${{ steps.locations.outputs.sysroot_key }}
+
+    # A cache entry is immutable, so a key that already exists is never saved
+    # again. The run id makes every run save its archives; restore-keys pick the
+    # newest entry for the same inputs, else the newest for the baseline, so a
+    # changed vcpkg.json only builds what is new.
+    - uses: actions/cache@v6
+      with:
+        path: ${{ steps.locations.outputs.vcpkg_archives }}
+        key: skse-vcpkg-${{ steps.locations.outputs.vcpkg_baseline }}-${{ steps.locations.outputs.vcpkg_key }}-${{ github.run_id }}
+        restore-keys: |
+          skse-vcpkg-${{ steps.locations.outputs.vcpkg_baseline }}-${{ steps.locations.outputs.vcpkg_key }}-
+          skse-vcpkg-${{ steps.locations.outputs.vcpkg_baseline }}-
+
+    # setup.sh re-checks every stamp and version, so a cache hit never skips work it needs.
+    - shell: bash
+      env:
+        NATIVE_TESTS: ${{ inputs.native-tests }}
+      run: |
+        set -euo pipefail
+        args=()
+        if [[ "$NATIVE_TESTS" == "true" ]]; then
+          args+=(--native-tests)
+        fi
+        "$GITHUB_ACTION_PATH/../../../scripts/setup.sh" --install "${args[@]}"
+        clang-cl --version
+
+    - shell: bash
+      env:
+        VCPKG_ROOT_PATH: ${{ steps.locations.outputs.vcpkg_root }}
+        SYSROOT_PATH: ${{ steps.locations.outputs.sysroot }}
+        LLVM_MINGW_BIN_PATH: ${{ steps.locations.outputs.llvm_mingw_bin }}
+        XWIN_BIN_PATH: ${{ steps.locations.outputs.xwin_bin }}
+      run: |
+        set -euo pipefail
+        {
+          echo "VCPKG_ROOT=$VCPKG_ROOT_PATH"
+          echo "XWIN_SYSROOT=$SYSROOT_PATH"
+          echo "LLVM_MINGW_BIN=$LLVM_MINGW_BIN_PATH"
+        } >> "$GITHUB_ENV"
+        dirname "$XWIN_BIN_PATH" >> "$GITHUB_PATH"
