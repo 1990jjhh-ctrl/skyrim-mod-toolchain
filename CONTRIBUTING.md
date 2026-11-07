@@ -22,7 +22,7 @@ Titles follow [Conventional Commits](https://www.conventionalcommits.org): `<typ
 [.github/workflows/ci.yml](.github/workflows/ci.yml) runs on every pull request and every push to `main`, and must pass before a merge. It runs the checks of step 3 of the workflow:
 
 - gitlint on the pull request's commits;
-- shellcheck on every shell script in the repository.
+- the tests (`scripts/test.sh`): the unit tests and shellcheck on every shell script.
 
 ## Editor settings
 
