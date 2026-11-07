@@ -22,9 +22,13 @@ class SetupPrereqsTest(ScriptCase):
         environment = {"SETUP_LLVM_PREFIX": str(self.llvm_prefix), **(env or {})}
         return super().run_script(script, *args, env=environment, cwd=cwd)
 
-    def stub_all(self, *, without: tuple[str, ...] = ()) -> None:
+    def stub_all(self, *, without: tuple[str, ...] = (), clang_version: str = "19.1.7") -> None:
         for name in COMMANDS:
-            if name not in without:
+            if name in without:
+                continue
+            if name == "clang-cl":
+                self.stub(name, f'echo "clang version {clang_version}"')
+            else:
                 self.stub(name)
 
     def missing_tokens(self, result) -> set[str]:
@@ -81,11 +85,44 @@ class SetupPrereqsTest(ScriptCase):
         self.assertIn("build-essential", result.stdout)
 
     def test_versioned_llvm_tools_accepted(self):
-        self.stub_all(without=LLVM_TOOLS)
-        for name in LLVM_TOOLS:
+        self.stub_all(without=LLVM_TOOLS[1:])
+        for name in LLVM_TOOLS[1:]:
             (self.llvm_prefix / f"{name}-21").touch(mode=0o755)
         result = self.run_script(SETUP, "--check")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_old_clang_cl_is_missing(self):
+        self.stub_all(clang_version="18.1.3")
+        result = self.run_script(SETUP, "--check")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(self.missing_tokens(result), {"clang-cl>=19"})
+
+    def test_install_with_old_clang_installs_19_and_links(self):
+        self.stub_all(clang_version="18.1.3")
+        # The fake apt-get replaces clang-cl with a 19 stub.
+        new = "#!/bin/sh\necho 'clang version 19.1.7'\n"
+        self.stub("apt-get", f"""[ "$1" = install ] && printf '%s' "{new}" > {self.bin / 'clang-cl'}; exit 0""")
+        self.stub("sudo", 'if [ "$1" != ln ]; then "$@"; fi')
+        result = self.run_script(SETUP, "--install", "--check")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        sudo_calls = self.calls("sudo")
+        install = [c for c in sudo_calls if c[:2] == ["apt-get", "install"]]
+        self.assertEqual(len(install), 1)
+        for package in ("clang-19", "lld-19", "llvm-19"):
+            self.assertIn(package, install[0])
+        links = {c[-1]: c[-2] for c in sudo_calls if c[0] == "ln"}
+        self.assertEqual(
+            links,
+            {
+                "/usr/local/bin/clang-cl": "/usr/lib/llvm-19/bin/clang",
+                "/usr/local/bin/lld-link": "/usr/lib/llvm-19/bin/lld",
+                "/usr/local/bin/llvm-rc": "/usr/lib/llvm-19/bin/llvm-rc",
+                "/usr/local/bin/llvm-mt": "/usr/lib/llvm-19/bin/llvm-mt",
+                "/usr/local/bin/llvm-ar": "/usr/lib/llvm-19/bin/llvm-ar",
+                "/usr/local/bin/llvm-ranlib": "/usr/lib/llvm-19/bin/llvm-ranlib",
+                "/usr/local/bin/llvm-lib": "/usr/lib/llvm-19/bin/llvm-ar",
+            },
+        )
 
     def test_unknown_option(self):
         result = self.run_script(SETUP, "--bogus")

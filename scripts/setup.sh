@@ -49,6 +49,15 @@ need_llvm() {
 	return 1
 }
 
+# True when the clang-cl found first on PATH (the plain name comes first in
+# CommonLibSSE-NG's toolchain file) is at least CLANG_MIN_VERSION.
+clang_cl_is_current() {
+	local major
+	need clang-cl || return 1
+	major="$(clang-cl --version 2>/dev/null | sed -n 's/.*clang version \([0-9][0-9]*\)\..*/\1/p;q' || true)"
+	[[ "$major" =~ ^[0-9]+$ ]] && ((major >= CLANG_MIN_VERSION))
+}
+
 missing_commands() {
 	local tool
 	# zip/unzip and pkg-config: vcpkg; xz: the llvm-mingw tarball;
@@ -56,7 +65,8 @@ missing_commands() {
 	for tool in git curl tar xz zip unzip pkg-config cmake ninja wine python3 sha256sum; do
 		need "$tool" || echo "$tool"
 	done
-	for tool in clang-cl lld-link llvm-rc llvm-mt; do
+	clang_cl_is_current || echo "clang-cl>=$CLANG_MIN_VERSION"
+	for tool in lld-link llvm-rc llvm-mt; do
 		need_llvm "$tool" || echo "$tool"
 	done
 	if ((NATIVE_TESTS)); then
@@ -65,13 +75,27 @@ missing_commands() {
 	return 0
 }
 
+# Debian and Ubuntu's versioned clang packages ship no plain clang-cl or
+# lld-link name; link the multi-call binaries by those names.
+link_llvm_tools() {
+	local llvm_bin="/usr/lib/llvm-$CLANG_MIN_VERSION/bin"
+	sudo ln -sf "$llvm_bin/clang" /usr/local/bin/clang-cl
+	sudo ln -sf "$llvm_bin/lld" /usr/local/bin/lld-link
+	sudo ln -sf "$llvm_bin/llvm-rc" /usr/local/bin/llvm-rc
+	sudo ln -sf "$llvm_bin/llvm-mt" /usr/local/bin/llvm-mt
+	# CMake takes its archiver and ranlib from these names.
+	sudo ln -sf "$llvm_bin/llvm-ar" /usr/local/bin/llvm-ar
+	sudo ln -sf "$llvm_bin/llvm-ranlib" /usr/local/bin/llvm-ranlib
+	sudo ln -sf "$llvm_bin/llvm-ar" /usr/local/bin/llvm-lib
+}
+
 check_prereqs() {
 	echo "== 1. System tools"
 	local -a missing packages
 	mapfile -t missing < <(missing_commands)
 	((${#missing[@]})) || return 0
 
-	packages=(git curl xz-utils zip unzip pkg-config cmake ninja-build wine python3 coreutils clang lld llvm)
+	packages=(git curl xz-utils zip unzip pkg-config cmake ninja-build wine python3 coreutils "clang-$CLANG_MIN_VERSION" "lld-$CLANG_MIN_VERSION" "llvm-$CLANG_MIN_VERSION")
 	((NATIVE_TESTS)) && packages+=(build-essential)
 
 	if ((INSTALL)); then
@@ -81,7 +105,10 @@ check_prereqs() {
 		fi
 		# A fresh distrobox has an empty package index.
 		sudo apt-get update
+		local link_tools=0
+		clang_cl_is_current || link_tools=1
 		sudo apt-get install -y --no-install-recommends "${packages[@]}"
+		((link_tools)) && link_llvm_tools
 		mapfile -t missing < <(missing_commands)
 		((${#missing[@]})) || return 0
 	fi

@@ -18,7 +18,7 @@ A standalone clone of this repository (`scripts/setup.sh`) is only for working o
 
 Options:
 
-- `--install`: install missing system packages with `sudo apt-get` (Debian and Ubuntu only). Without it, setup prints the missing tools and the `apt-get` command, then stops.
+- `--install`: install missing system packages with `sudo apt-get` (Debian and Ubuntu only). Without it, setup prints the missing tools and the `apt-get` command, then stops. The compiler must be at least `CLANG_MIN_VERSION` in [versions.env](versions.env); `--install` installs it and links the tools by their plain names into `/usr/local/bin`. It needs a distribution that packages clang-`CLANG_MIN_VERSION` (Ubuntu 24.04 does; Ubuntu 22.04 and Debian 12 don't).
 - `--native-tests`: also require a native C++ compiler, for host-side tests.
 - `--check`: stop after the prerequisite check, before installing llvm-mingw, xwin, the sysroot and vcpkg. Combined with `--install`, the missing system packages are still installed.
 
