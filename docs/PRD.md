@@ -91,7 +91,7 @@ Key scenarios:
 | R9 | The toolchain shall provide format and lint scripts that take the project's source folders as arguments and use the pinned clang-format/clang-tidy, with a check mode for CI. | Must |
 | R10 | The toolchain shall provide shared `.clang-format` and `.clang-tidy` configs. | Must |
 | R11 | The toolchain shall provide a reusable GitHub Action that installs and caches the toolchain at the pinned versions. | Must |
-| R12 | Projects shall consume the toolchain as a git submodule pinned to a commit or tag, and reference the CI action by tag. | Must |
+| R12 | Projects shall consume the toolchain as a git submodule pinned to a commit or tag, and use the CI action from that submodule by local path (`uses: ./lib/skyrim-mod-toolchain/.github/actions/setup`). | Must |
 | R13 | skyrim-mcp, trials-of-mastery and beyond-mastery shall build locally and in CI through the toolchain, with their duplicated files removed. | Must |
 | R14 | Setup shall support native unit-test prerequisites (host C++ compiler, Python) as an option for projects that need them. | Should |
 | R15 | The README shall document running setup inside an Ubuntu distrobox on SteamOS. | Should |
@@ -134,6 +134,10 @@ None open. Resolved questions and their answers:
    example a renamed script or option, or a CommonLibSSE-NG bump that breaks
    the build); a minor release for new features and pin bumps that need no
    project changes; a patch release for fixes.
+4. **How do projects reference the CI action?** By local path from the
+   submodule (`uses: ./lib/skyrim-mod-toolchain/.github/actions/setup`), not by
+   tag. The action then always matches the submodule pin, so there is one
+   thing to bump.
 
 ## 10. Milestones
 

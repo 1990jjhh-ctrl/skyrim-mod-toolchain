@@ -9,7 +9,13 @@ class PinsTest(unittest.TestCase):
     def test_versions_has_exactly_the_known_names(self):
         self.assertEqual(
             set(read_versions()),
-            {"LLVM_MINGW_VERSION", "LLVM_MINGW_SHA256", "XWIN_VERSION", "XWIN_SHA256"},
+            {
+                "LLVM_MINGW_VERSION",
+                "LLVM_MINGW_SHA256",
+                "XWIN_VERSION",
+                "XWIN_SHA256",
+                "CLANG_MIN_VERSION",
+            },
         )
 
     def test_checksums_are_sha256(self):

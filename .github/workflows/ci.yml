@@ -36,3 +36,18 @@ jobs:
           submodules: recursive
       # python3 and shellcheck are preinstalled on the runner.
       - run: scripts/test.sh
+
+  # The first run builds the vcpkg dependencies; later runs restore them from
+  # the cache the setup action keeps.
+  cross-build:
+    name: Cross build of the consumer project
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup
+        with:
+          source-dir: tests/consumer
+      - run: REQUIRE_CROSS_BUILD=1 python3 -m unittest tests.test_consumer -v
