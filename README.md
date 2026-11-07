@@ -49,6 +49,7 @@ Setup ends by printing the `export` lines (`VCPKG_ROOT`, `XWIN_SYSROOT`, `LLVM_M
 4. **Include the CommonLibSSE-NG helper** in `CMakeLists.txt` after `project()`, with `include(lib/skyrim-mod-toolchain/cmake/commonlibsse.cmake)`. Set `ENABLE_SKYRIM_SE`, `ENABLE_SKYRIM_AE` and `ENABLE_SKYRIM_VR` yourself first. Then call `add_commonlibsse_plugin()`.
 5. **Give the plugin a precompiled header** that includes `<RE/Skyrim.h>` and `<SKSE/SKSE.h>` and has `using namespace std::literals;`. The generated plugin source needs it ([tests/consumer/src/PCH.h](tests/consumer/src/PCH.h)).
 6. **Build:** `cmake --preset <your preset>` and `cmake --build --preset <your preset>`, with the exports from setup in the environment.
+7. **CI:** after checking out with `submodules: recursive`, set the toolchain up with the action from the submodule, `uses: ./lib/skyrim-mod-toolchain/.github/actions/setup`. If the CMake source directory is not the repository root, include it in the path and pass it as `source-dir` (for `plugin/`: `uses: ./plugin/lib/skyrim-mod-toolchain/.github/actions/setup` with `source-dir: plugin`). The action caches the toolchain and the vcpkg packages. The `cross-build` job in [.github/workflows/ci.yml](.github/workflows/ci.yml) is a working example; the inputs and outputs are in [.github/actions/setup/action.yml](.github/actions/setup/action.yml).
 
 Checks to run on a project, with its own source folders:
 
