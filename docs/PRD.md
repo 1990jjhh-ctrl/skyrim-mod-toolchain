@@ -111,18 +111,29 @@ Key scenarios:
 |---|---|---|
 | All three projects can build against the same CommonLibSSE-NG version. trials-of-mastery pins `8eadded` today, the others v13.1.0. | Medium / High | Move trials-of-mastery to the shared version during migration; projects can stay on an older toolchain tag until they are ready. |
 | Lockstep pins force a project to upgrade before it is ready. | Medium / Medium | Projects pin the submodule; a bump reaches a project only when it updates the submodule. |
-| vcpkg expects its baseline configuration in the project root, which may conflict with the toolchain owning it. | Medium / Medium | Resolve during design; see open question 1. |
+| vcpkg expects its baseline configuration in the project root, which may conflict with the toolchain owning it. | Resolved | Projects symlink the configuration; see section 9, question 1. |
 | Wine and the xwin sysroot behave the same inside a distrobox on SteamOS. | Low / Medium | Verify on a Deck before marking R15 done. |
 | Public users expect support. | Low / Low | README states there is no support commitment. |
 
 ## 9. Open questions
 
-1. How does a project use the toolchain's vcpkg baseline when vcpkg reads its
-   configuration from the project root? (Owner: author, during design.)
-2. Which of the two existing static-runtime checks (Python PE parser or
-   `llvm-readobj`) becomes the shared one? (Owner: author, during design.)
-3. Versioning scheme for toolchain tags (for example semver, where a
-   CommonLibSSE-NG bump is a minor or major release). (Owner: author.)
+None open. Resolved questions and their answers:
+
+1. **How does a project use the toolchain's vcpkg baseline when vcpkg reads
+   its configuration from the project root?** Each project's
+   `vcpkg-configuration.json` is a git symlink to the toolchain's file. vcpkg
+   follows the symlink (tested 2026-11-07), version constraints in the
+   project's `vcpkg.json` keep working, and symlinks are fine because the host
+   is Linux only.
+2. **Which static-runtime check becomes the shared one?** The Python PE
+   import parser from trials-of-mastery, which needs no other file. The unit
+   tests from beyond-mastery (`tests/test_runtime_deps.py`) move along with it,
+   adapted to that version.
+3. **How are toolchain tags versioned?** Semantic versioning by the impact on
+   projects: a major release when a project has to change something (for
+   example a renamed script or option, or a CommonLibSSE-NG bump that breaks
+   the build); a minor release for new features and pin bumps that need no
+   project changes; a patch release for fixes.
 
 ## 10. Milestones
 
