@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-skyrim-mod-toolchain is the shared Linux cross-compile toolchain for skyrim-mcp, trials-of-mastery and beyond-mastery. Only the PRD and the project tooling exist so far.
+skyrim-mod-toolchain is the shared Linux cross-compile toolchain for skyrim-mcp, trials-of-mastery and beyond-mastery. Milestone 1 is in place: setup, build helpers, style scripts and tests.
 
 Check the `Status:` line of [docs/PRD.md](docs/PRD.md) before implementing. While it reads Draft, work on the PRD, not on code.
 
 ## Where things are defined
 
+- How projects consume the toolchain: [README.md#use-it-in-a-project](README.md#use-it-in-a-project)
 - Goals, scope, requirements and milestones: [docs/PRD.md](docs/PRD.md)
 - The PRD ends with its open questions ([docs/PRD.md#9-open-questions](docs/PRD.md#9-open-questions)). Don't settle one in code; raise it with the user.
 

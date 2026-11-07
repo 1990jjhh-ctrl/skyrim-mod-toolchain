@@ -1,0 +1,26 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "skse-clangcl",
+      "displayName": "SKSE plugin (Linux host, clang-cl cross-compile)",
+      "description": "Requires the toolchain checked out at lib/skyrim-mod-toolchain (fileDir would expand against the including file, so paths are sourceDir-relative)",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_CXX_FLAGS": "/permissive- /EHsc /W4 /bigobj -Wno-overloaded-virtual -Wno-delete-non-abstract-non-virtual-dtor -Wno-inconsistent-missing-override -Wno-reinterpret-base-class -Wno-nonportable-include-path -Wno-deprecated-copy-with-user-provided-copy -Wno-invalid-offsetof -Wno-switch -Wno-unused-command-line-argument -Wno-deprecated-volatile -Wno-unused-private-field -Wno-multichar",
+        "USE_VCPKG": "ON",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-clangcl-static",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/lib/skyrim-mod-toolchain/cmake/triplets",
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/lib/skyrim-mod-toolchain/lib/commonlibsse-ng/examples/linux-cross-compile/custom-ports",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/lib/skyrim-mod-toolchain/lib/commonlibsse-ng/cmake/toolchain-linux-clangcl.cmake"
+      }
+    }
+  ]
+}

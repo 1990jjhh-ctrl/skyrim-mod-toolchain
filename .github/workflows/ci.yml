@@ -27,12 +27,12 @@ jobs:
       - name: Lint the pull request's commits
         run: gitlint --commits "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
 
-  shellcheck:
-    name: Shell scripts (shellcheck)
+  tests:
+    name: Tests and shellcheck
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      # shellcheck is preinstalled on the runner. Without any scripts yet,
-      # there is nothing to check and the step passes.
-      - name: Check every shell script
-        run: git ls-files -z '*.sh' | xargs -0 --no-run-if-empty shellcheck
+        with:
+          submodules: recursive
+      # python3 and shellcheck are preinstalled on the runner.
+      - run: scripts/test.sh

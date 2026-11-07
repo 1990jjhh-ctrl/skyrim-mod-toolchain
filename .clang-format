@@ -1,0 +1,113 @@
+# Based on CommonLibSSE-NG's style (lib/commonlibsse-ng/.clang-format), as in
+# the Beyond Mastery plugin, with these deliberate changes:
+#
+# - Line endings: upstream asks for CRLF; these projects are developed on Linux
+#   and every source file is LF, so LineEnding: LF replaces upstream's
+#   DeriveLineEnding/UseCRLF pair (both deprecated since clang-format 16).
+# - No indentation for namespaces, extern blocks and preprocessor directives: a
+#   namespace or extern "C" block usually spans a whole file, so indenting it
+#   costs one level everywhere without adding information.
+#
+# Format with scripts/format.sh, which uses llvm-mingw's clang-format: setup.sh
+# installs it at a pinned version, and output differs between versions.
+---
+BasedOnStyle: LLVM
+AccessModifierOffset: -4
+AlignAfterOpenBracket: DontAlign
+AlignConsecutiveAssignments: 'false'
+AlignConsecutiveBitFields: 'false'
+AlignConsecutiveDeclarations: 'true'
+AlignConsecutiveMacros: 'false'
+AlignEscapedNewlines: Left
+AlignOperands: Align
+AlignTrailingComments: 'true'
+AllowAllArgumentsOnNextLine: 'false'
+AllowAllConstructorInitializersOnNextLine: 'false'
+AllowAllParametersOfDeclarationOnNextLine: 'false'
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: 'false'
+AllowShortEnumsOnASingleLine: 'true'
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: All
+AllowShortLoopsOnASingleLine: 'true'
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: 'true'
+AlwaysBreakTemplateDeclarations: 'Yes'
+BinPackArguments: 'true'
+BinPackParameters: 'true'
+BitFieldColonSpacing: After
+BraceWrapping:
+    AfterCaseLabel: 'true'
+    AfterClass: 'true'
+    AfterControlStatement: 'false'
+    AfterEnum: 'true'
+    AfterFunction: 'true'
+    AfterNamespace: 'true'
+    AfterStruct: 'true'
+    AfterUnion: 'true'
+    AfterExternBlock: 'true'
+    BeforeCatch: 'false'
+    BeforeElse: 'false'
+    BeforeLambdaBody: 'false'
+    BeforeWhile: 'false'
+    IndentBraces: 'false'
+    SplitEmptyFunction: 'false'
+    SplitEmptyRecord: 'false'
+    SplitEmptyNamespace: 'false'
+BreakBeforeBinaryOperators: None
+BreakBeforeBraces: Custom
+BreakBeforeTernaryOperators: 'false'
+BreakConstructorInitializers: AfterColon
+BreakInheritanceList: AfterColon
+BreakStringLiterals: 'true'
+ColumnLimit: 0
+CompactNamespaces: 'false'
+ConstructorInitializerAllOnOneLineOrOnePerLine: 'false'
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+Cpp11BracedListStyle: 'false'
+DerivePointerAlignment: 'false'
+DisableFormat: 'false'
+FixNamespaceComments: 'false'
+IncludeBlocks: Preserve
+IndentCaseBlocks: 'true'
+IndentCaseLabels: false
+IndentExternBlock: NoIndent
+IndentGotoLabels: 'false'
+IndentPPDirectives: None
+IndentWidth: 4
+IndentWrappedFunctionNames: 'true'
+KeepEmptyLinesAtTheStartOfBlocks: 'false'
+Language: Cpp
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: None
+PointerAlignment: Left
+ReflowComments : 'false'
+SortIncludes: 'true'
+SortUsingDeclarations: 'true'
+SpaceAfterCStyleCast: 'false'
+SpaceAfterLogicalNot: 'false'
+SpaceAfterTemplateKeyword: 'true'
+SpaceBeforeAssignmentOperators: 'true'
+SpaceBeforeCpp11BracedList: 'false'
+SpaceBeforeCtorInitializerColon: 'true'
+SpaceBeforeInheritanceColon: 'true'
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: 'true'
+SpaceBeforeSquareBrackets: 'false'
+SpaceInEmptyBlock: 'false'
+SpaceInEmptyParentheses: 'false'
+SpacesBeforeTrailingComments: 2
+SpacesInAngles: 'false'
+SpacesInCStyleCastParentheses: 'false'
+SpacesInConditionalStatement: 'false'
+SpacesInContainerLiterals: 'true'
+SpacesInParentheses: 'false'
+SpacesInSquareBrackets: 'false'
+Standard: Latest
+TabWidth: 4
+LineEnding: LF
+UseTab: AlignWithSpaces
+
+...
