@@ -77,13 +77,110 @@ check_prereqs() {
 	exit 1
 }
 
+# Temp dirs of the running install step; removed on any exit, including errors.
+CLEANUP_DIRS=()
+cleanup() {
+	((${#CLEANUP_DIRS[@]})) && rm -rf "${CLEANUP_DIRS[@]}"
+	return 0
+}
+trap cleanup EXIT
+
+# make_temp_dir <parent>: sets TEMP_DIR to a new directory inside <parent>.
+make_temp_dir() {
+	mkdir -p "$1"
+	TEMP_DIR="$(mktemp -d "$1/.setup.XXXXXX")"
+	CLEANUP_DIRS+=("$TEMP_DIR")
+}
+
+# fetch_verified <url> <sha256> <dest>: download; on a mismatch remove <dest>, exit 1.
+fetch_verified() {
+	local url="$1" sha256="$2" dest="$3"
+	rm -f "$dest"
+	echo "Downloading $url"
+	if ! curl -fL --retry 3 -o "$dest" "$url"; then
+		rm -f "$dest"
+		echo "Download failed: $url" >&2
+		exit 1
+	fi
+	if ! printf '%s  %s\n' "$sha256" "$dest" | sha256sum -c --quiet - >/dev/null; then
+		rm -f "$dest"
+		echo "sha256 mismatch for $url (expected $sha256); refusing to install it." >&2
+		exit 1
+	fi
+}
+
+install_llvm_mingw() {
+	echo "== 2. llvm-mingw"
+	local compiler=x86_64-w64-mingw32-clang++
+	local target="$HOME/.local/opt/llvm-mingw"
+	# A set but invalid override is an error, never a fallback.
+	if [[ -n "${LLVM_MINGW_BIN:-}" ]]; then
+		if [[ ! -x "$LLVM_MINGW_BIN/$compiler" ]]; then
+			echo "LLVM_MINGW_BIN=$LLVM_MINGW_BIN has no $compiler; fix or unset it." >&2
+			exit 1
+		fi
+		echo "Using LLVM_MINGW_BIN=$LLVM_MINGW_BIN"
+		return 0
+	fi
+	# The stamp names the installed release, so a pin bump reinstalls.
+	local stamp="$target/.toolchain-version"
+	if [[ -x "$target/bin/$compiler" && -f "$stamp" && "$(<"$stamp")" == "$LLVM_MINGW_VERSION" ]]; then
+		echo "Found $target"
+		return 0
+	fi
+
+	local tarball="llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-x86_64.tar.xz"
+	make_temp_dir "$(dirname "$target")"
+	local tmp="$TEMP_DIR"
+	fetch_verified \
+		"https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/${tarball}" \
+		"$LLVM_MINGW_SHA256" "$tmp/$tarball"
+	mkdir "$tmp/extract"
+	tar -xf "$tmp/$tarball" -C "$tmp/extract" --strip-components=1
+	if [[ ! -x "$tmp/extract/bin/$compiler" ]]; then
+		echo "The llvm-mingw tarball has no bin/$compiler." >&2
+		exit 1
+	fi
+	# Replace a partial install left by an interrupted run.
+	rm -rf "$target"
+	mv "$tmp/extract" "$target"
+	printf '%s\n' "$LLVM_MINGW_VERSION" >"$stamp"
+	echo "Installed $target"
+}
+
+xwin_is_pinned() {
+	[[ "$("$1" --version 2>/dev/null)" == "xwin $XWIN_VERSION" ]]
+}
+
+install_xwin() {
+	echo "== 3. xwin"
+	local target="$HOME/.local/bin/xwin"
+	if xwin_is_pinned "$target"; then
+		echo "Found $target"
+		return 0
+	fi
+	if need xwin && xwin_is_pinned xwin; then
+		echo "Found $(command -v xwin)"
+		return 0
+	fi
+
+	local dir="xwin-${XWIN_VERSION}-x86_64-unknown-linux-musl"
+	make_temp_dir "$(dirname "$target")"
+	local tmp="$TEMP_DIR"
+	fetch_verified \
+		"https://github.com/Jake-Shadle/xwin/releases/download/${XWIN_VERSION}/${dir}.tar.gz" \
+		"$XWIN_SHA256" "$tmp/xwin.tar.gz"
+	tar -xzf "$tmp/xwin.tar.gz" -C "$tmp" --strip-components=1 "$dir/xwin"
+	chmod +x "$tmp/xwin"
+	mv "$tmp/xwin" "$target"
+	echo "Installed $target"
+}
+
 # Placeholders, replaced by the install steps.
 not_implemented() {
 	echo "$1: not implemented yet" >&2
 	return 1
 }
-install_llvm_mingw() { not_implemented install_llvm_mingw; }
-install_xwin() { not_implemented install_xwin; }
 install_sysroot() { not_implemented install_sysroot; }
 install_vcpkg() { not_implemented install_vcpkg; }
 init_submodules() { not_implemented init_submodules; }
@@ -112,5 +209,10 @@ main() {
 	init_submodules
 	print_env
 }
+
+# Tests source this file to call single steps.
+if [[ "${1:-}" == --source-only ]]; then
+	return 0
+fi
 
 main "$@"
