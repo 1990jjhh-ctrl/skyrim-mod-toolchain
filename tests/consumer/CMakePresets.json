@@ -1,0 +1,11 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "include": ["lib/skyrim-mod-toolchain/cmake/CMakePresets.json"],
+  "configurePresets": [
+    { "name": "release", "inherits": "skse-clangcl" }
+  ],
+  "buildPresets": [
+    { "name": "release", "configurePreset": "release" }
+  ]
+}
