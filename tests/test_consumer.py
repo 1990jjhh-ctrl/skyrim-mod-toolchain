@@ -11,6 +11,7 @@ from tests.support import TOOLCHAIN_ROOT
 
 CONSUMER = TOOLCHAIN_ROOT / "tests" / "consumer"
 CHECK_RUNTIME_DEPS = TOOLCHAIN_ROOT / "scripts" / "check_runtime_deps.py"
+LINT = TOOLCHAIN_ROOT / "scripts" / "lint.sh"
 PLUGIN_NAME = "ToolchainConsumer"
 
 
@@ -72,15 +73,25 @@ class PresetTests(unittest.TestCase):
 
 
 class CrossBuildTests(unittest.TestCase):
-    def test_cross_build(self) -> None:
+    def require(self, ready: bool, missing: str) -> None:
+        """Skip unless `ready`; with REQUIRE_CROSS_BUILD=1, fail instead."""
+        if ready:
+            return
+        if os.environ.get("REQUIRE_CROSS_BUILD") == "1":
+            self.fail(f"REQUIRE_CROSS_BUILD=1 but {missing}")
+        self.skipTest(missing)
+
+    def sysroot(self) -> pathlib.Path:
         vcpkg_root = os.environ.get("VCPKG_ROOT")
         sysroot = pathlib.Path(os.environ.get("XWIN_SYSROOT", pathlib.Path.home() / "xwin-out"))
-        if not (vcpkg_root and pathlib.Path(vcpkg_root).is_dir() and sysroot.is_dir()):
-            if os.environ.get("REQUIRE_CROSS_BUILD") == "1":
-                self.fail("REQUIRE_CROSS_BUILD=1 but VCPKG_ROOT or the xwin sysroot is missing")
-            self.skipTest("VCPKG_ROOT or the xwin sysroot is missing")
+        self.require(
+            bool(vcpkg_root) and pathlib.Path(vcpkg_root).is_dir() and sysroot.is_dir(),
+            "VCPKG_ROOT or the xwin sysroot is missing",
+        )
+        return sysroot
 
-        env = {**os.environ, "XWIN_SYSROOT": str(sysroot)}
+    def test_cross_build(self) -> None:
+        env = {**os.environ, "XWIN_SYSROOT": str(self.sysroot())}
         for command in (["--preset", "release"], ["--build", "--preset", "release"]):
             result = subprocess.run(
                 ["cmake", *command], cwd=CONSUMER, env=env, capture_output=True, text=True
@@ -93,6 +104,21 @@ class CrossBuildTests(unittest.TestCase):
             [str(CHECK_RUNTIME_DEPS), str(dlls[0])], capture_output=True, text=True
         )
         self.assertEqual(check.returncode, 0, check.stdout + check.stderr)
+
+    def test_lint_cross_build(self) -> None:
+        # Runs after test_cross_build (alphabetical order), which makes the build.
+        self.sysroot()
+        compile_db = CONSUMER / "build" / "release" / "compile_commands.json"
+        self.require(compile_db.is_file(), f"no {compile_db}; the cross build has not run")
+        result = subprocess.run(
+            [str(LINT), "build/release", "src"],
+            cwd=CONSUMER,
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-3000:])
+        self.assertIn("files clean", result.stdout)
 
 
 if __name__ == "__main__":
