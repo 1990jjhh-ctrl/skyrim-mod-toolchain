@@ -1,0 +1,18 @@
+# Commit message rules for gitlint. See CONTRIBUTING.md#commit-messages.
+#
+# The rules apply to every commit in this repository.
+
+[general]
+# Titles follow Conventional Commits: "<type>(<scope>)?: <description>".
+contrib=contrib-title-conventional-commits
+# A one-line commit needs no body; the Co-Authored-By trailer is a body anyway.
+ignore=body-is-missing
+
+[title-max-length]
+line-length=72
+
+[body-max-line-length]
+line-length=80
+
+[contrib-title-conventional-commits]
+types=feat,fix,docs,build,ci,chore,refactor,style,test,perf,revert

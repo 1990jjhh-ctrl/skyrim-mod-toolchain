@@ -1,0 +1,38 @@
+# Checks every pull request and every push to main with the same tools a
+# developer runs (CONTRIBUTING.md#ci).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  commits:
+    name: Commit messages (gitlint)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      # The version the commit-msg hook runs locally.
+      - run: pip install gitlint==0.19.1
+      - name: Lint the pull request's commits
+        run: gitlint --commits "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+
+  shellcheck:
+    name: Shell scripts (shellcheck)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      # shellcheck is preinstalled on the runner. Without any scripts yet,
+      # there is nothing to check and the step passes.
+      - name: Check every shell script
+        run: git ls-files -z '*.sh' | xargs -0 --no-run-if-empty shellcheck
