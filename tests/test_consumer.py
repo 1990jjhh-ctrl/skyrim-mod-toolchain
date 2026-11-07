@@ -41,6 +41,14 @@ class PresetTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('"release"', result.stdout)
 
+    def test_shared_files_are_linked(self) -> None:
+        # The files the README tells projects to symlink from the toolchain.
+        for name in ("vcpkg-configuration.json", ".clang-format", ".clang-tidy"):
+            with self.subTest(name=name):
+                link = CONSUMER / name
+                self.assertTrue(link.is_symlink())
+                self.assertEqual(link.resolve(), TOOLCHAIN_ROOT / name)
+
     def test_only_source_relative_macros(self) -> None:
         # ${fileDir} expands against the consumer's presets file, not this one.
         presets = json.loads((TOOLCHAIN_ROOT / "cmake" / "CMakePresets.json").read_text())

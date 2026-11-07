@@ -1,0 +1,20 @@
+# Keeps code flat: early returns instead of else branches, and at most three
+# indentation levels counted from the left margin (namespaces and extern blocks
+# do not indent, see .clang-format).
+#
+# NestingThreshold counts from the function body, which is level 1, and does
+# not see an enclosing class. 3 matches the rule for free functions and member
+# functions defined outside their class; a member function defined inside its
+# class gets one level more than the rule allows, so review catches that case.
+#
+# Run with scripts/lint.sh.
+---
+Checks: >
+  -*,
+  readability-else-after-return,
+  readability-function-size
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*'
+ExcludeHeaderFilterRegex: '/(lib|build|vcpkg_installed)/'
+CheckOptions:
+  readability-function-size.NestingThreshold: 3
