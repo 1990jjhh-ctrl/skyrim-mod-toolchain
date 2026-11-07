@@ -1,6 +1,6 @@
 # skyrim-mod-toolchain — Product Requirements Document
 
-**Status:** Draft · **Author:** Joel Hirsbrunner · **Date:** 2026-11-07
+**Status:** Approved · **Author:** Joel Hirsbrunner · **Date:** 2026-11-07
 
 ## 1. Summary
 
