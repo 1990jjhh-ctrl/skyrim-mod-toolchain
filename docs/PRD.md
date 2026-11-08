@@ -109,7 +109,7 @@ Key scenarios:
 
 | Assumption or risk | Likelihood / impact | Mitigation |
 |---|---|---|
-| All three projects can build against the same CommonLibSSE-NG version. trials-of-mastery pins `8eadded` today, the others v13.1.0. | Medium / High | Move trials-of-mastery to the shared version during migration; projects can stay on an older toolchain tag until they are ready. |
+| All three projects can build against the same CommonLibSSE-NG version. Before the migration, trials-of-mastery pinned 15.5.0 (`8eadded`), the others v13.1.0. | Medium / High | The toolchain pins a release at least as new as the newest project's, so no project moves backwards; projects can stay on an older toolchain tag until they are ready. |
 | Lockstep pins force a project to upgrade before it is ready. | Medium / Medium | Projects pin the submodule; a bump reaches a project only when it updates the submodule. |
 | vcpkg expects its baseline configuration in the project root, which may conflict with the toolchain owning it. | Resolved | Projects symlink the configuration; see section 9, question 1. |
 | Wine and the xwin sysroot behave the same inside a distrobox on SteamOS. | Low / Medium | Verify on a Deck before marking R15 done. |
