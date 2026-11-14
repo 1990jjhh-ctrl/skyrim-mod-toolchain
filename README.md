@@ -110,6 +110,18 @@ python3 lib/skyrim-mod-toolchain/scripts/normalize_pex.py Scripts/*.pex
 
 Rewrites each `.pex` in place with the compile time and the source's modification time zeroed and the user and machine names emptied, so a recompile gives the same bytes and no personal names are committed. It checks every file before changing any. Exit statuses: 0 on success, 1 if a file can't be read or is not a `.pex`, 2 on bad usage.
 
+#### Papyrus compile: `papyrus.sh`
+
+```sh
+SKYRIM_DIR=<Skyrim Special Edition folder> \
+PROTON_DIR=<Steam>/steamapps/common/Proton\ -\ Experimental/files \
+  lib/skyrim-mod-toolchain/scripts/papyrus.sh <source-dir> <output-dir> [<import-dir>...]
+```
+
+Compiles every `.psc` in the source dir with the Creation Kit's compiler under Proton's Wine, normalizes the output with `normalize_pex.py` and moves the `.pex` into the output dir, only if the compiler reports every script compiled. It needs the Creation Kit installed in `SKYRIM_DIR` (`Papyrus Compiler/` and the script sources in `Data/Source/Scripts/`) and only reads that folder; it refuses an output dir inside it. The compiler imports the source dir, then the import dirs in order, then the game's sources. The Wine prefix and the last compile's log are kept in `${XDG_CACHE_HOME:-~/.cache}/skyrim-mod-toolchain/papyrus/`. Exit statuses: 0 when every script compiled, 1 on a failed compile or a missing input, 2 on bad usage.
+
+CI can't run the compiler, so commit the normalized `.pex` along with its sources.
+
 ## Steam Deck
 
 Run setup inside an Ubuntu 24.04 distrobox, not on SteamOS itself (from your project, as in [Setup](#setup)):
