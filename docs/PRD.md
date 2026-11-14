@@ -1,6 +1,6 @@
 # skyrim-mod-toolchain — Product Requirements Document
 
-**Status:** Approved · **Author:** Joel Hirsbrunner · **Date:** 2026-11-07
+**Status:** Approved · **Author:** Joel Hirsbrunner · **Date:** 2026-11-07, amended 2026-11-14
 
 ## 1. Summary
 
@@ -8,7 +8,10 @@ skyrim-mod-toolchain is the shared toolchain for cross-compiling SKSE plugins
 with CommonLibSSE-NG on a Linux host. It replaces the setup, build-helper,
 format/lint, style and CI code that skyrim-mcp, trials-of-mastery and
 beyond-mastery each carry today, and becomes the one place that pins the tool
-versions, CommonLibSSE-NG and the vcpkg baseline. The repo is public.
+versions, CommonLibSSE-NG and the vcpkg baseline. It also holds the mod-file
+tools that let a project build its plugin (`.esp`) and Papyrus scripts on
+Linux, where xEdit and the Creation Kit don't run natively. The repo is
+public.
 
 ## 2. Problem statement
 
@@ -65,12 +68,16 @@ Key scenarios:
 - The pinned CommonLibSSE-NG version and vcpkg baseline.
 - Migrating skyrim-mcp, trials-of-mastery and beyond-mastery onto the
   toolchain and deleting their copies.
+- Mod-file tools (added 2026-11-14): a plugin writer that builds an `.esp`
+  from a text description, a `.pex` normalizer and a Papyrus compile script.
 
 ### Out of scope / non-goals
 
 - Windows or macOS hosts. Linux host only.
-- Packaging or releasing mods (Nexus/FOMOD packages, Papyrus compilation, ESP
-  generation). These stay in the projects.
+- Packaging or releasing mods (Nexus/FOMOD packages). This stays in the
+  projects.
+- Editing existing plugins, or plugin records beyond those R17 lists. Projects
+  with other records keep their own tools until the writer grows them.
 - Skyrim VR or SE-1.5.97-specific work. The toolchain adds nothing for these
   runtimes; a project that enables SE in CommonLibSSE-NG keeps working.
 - Per-project vcpkg dependency lists and the list of DLLs a project builds.
@@ -96,6 +103,10 @@ Key scenarios:
 | R14 | Setup shall support native unit-test prerequisites (host C++ compiler, Python) as an option for projects that need them. | Should |
 | R15 | The README shall document running setup inside an Ubuntu distrobox on SteamOS. | Should |
 | R16 | The README shall document how to start a new SKSE plugin project on the toolchain. | Could |
+| R17 | The toolchain shall provide a plugin writer, using only the Python standard library, that builds an `.esp` from a TOML description and dumps an `.esp` as JSON. It shall support a list of masters, plain or ESL-flagged plugins, quests with Start Game Enabled and Run Once flags and scripts with object properties (a form in a master or in the plugin itself), and empty interior cells. | Must |
+| R18 | The plugin writer shall give the same bytes for the same description, shall read every file it writes back strictly before reporting success, and its dump shall reject any file it could not have written instead of printing part of it. It shall exit 0 on success, 1 on invalid input with a message naming the TOML key or file offset, and 2 on bad usage. | Must |
+| R19 | The toolchain shall provide a `.pex` normalizer that zeroes the compile and source modification times and empties the user and machine names, so a recompile gives the same bytes and no personal names are committed. | Must |
+| R20 | The toolchain shall provide a script that compiles a folder of Papyrus sources with the Creation Kit's compiler under Proton's Wine and normalizes the output. It shall keep its Wine prefix outside the game directory and outside the project's tracked files, write nothing into the game directory, and fail unless the compiler reports every script compiled. | Must |
 
 ## 7. Constraints & dependencies
 
@@ -103,6 +114,8 @@ Key scenarios:
   runner) and Steam Deck via an Ubuntu distrobox.
 - Depends on CommonLibSSE-NG, xwin (which requires accepting Microsoft's
   license for the MSVC CRT and Windows SDK), vcpkg, llvm-mingw and Wine.
+- The Papyrus compile (R20) needs the Creation Kit installed in the game
+  directory and Proton, so it can't run in CI; its tests use a fake compiler.
 - License: GPL-3.0-or-later, matching the three projects and CommonLibSSE-NG.
 
 ## 8. Assumptions & risks
@@ -114,10 +127,19 @@ Key scenarios:
 | vcpkg expects its baseline configuration in the project root, which may conflict with the toolchain owning it. | Resolved | Projects symlink the configuration; see section 9, question 1. |
 | Wine and the xwin sysroot behave the same inside a distrobox on SteamOS. | Low / Medium | Verify on a Deck before marking R15 done. |
 | Public users expect support. | Low / Low | README states there is no support commitment. |
+| A plugin the writer builds passes its own read-back but has a layout the game rejects or crashes on. | Medium / High | Layouts follow UESP's "Skyrim Mod:Mod File Format" pages and are checked against records in released plugins; the consuming project's in-game test is the final check. |
+| A Proton update breaks the Papyrus compiler under Wine. | Low / Medium | Projects commit the normalized `.pex`, so only rebuilding is blocked. |
 
 ## 9. Open questions
 
-None open. Resolved questions and their answers:
+Open:
+
+- **Should the plugin writer also cover beyond-mastery's MCM plugin** (a
+  quest alias forced to a reference, with its own script), so beyond-mastery
+  can drop its copies of the mod-file tools? R17 lists only what skyrim-mcp
+  needs.
+
+Resolved questions and their answers:
 
 1. **How does a project use the toolchain's vcpkg baseline when vcpkg reads
    its configuration from the project root?** Each project's
@@ -146,3 +168,4 @@ None open. Resolved questions and their answers:
 2. Reusable CI action.
 3. Migrate beyond-mastery, then skyrim-mcp, then trials-of-mastery (which
    also moves to the shared CommonLibSSE-NG version).
+4. Mod-file tools (R17 to R20), first used by skyrim-mcp's sample mod.
