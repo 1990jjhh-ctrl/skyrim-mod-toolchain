@@ -57,6 +57,71 @@ Checks to run on a project, with its own source folders:
 - `lib/skyrim-mod-toolchain/scripts/format.sh [--check] <path>...` formats the C++ sources under the paths with the pinned clang-format; `--check` only reports.
 - `lib/skyrim-mod-toolchain/scripts/lint.sh <build-dir> <path>...` runs clang-tidy on the sources under the paths. The build directory of the shared preset is `build/<preset name>`.
 
+### Mod-file tools
+
+These build a mod's plugin and scripts on Linux. They need only the toolchain checkout, not setup or its submodules, and Python 3.11 or newer. Projects under another license run them as separate programs.
+
+#### Plugin: `esp.py`
+
+```sh
+python3 lib/skyrim-mod-toolchain/scripts/esp.py build plugin.toml MyMod.esp
+python3 lib/skyrim-mod-toolchain/scripts/esp.py dump MyMod.esp
+```
+
+`build` writes the plugin described in a TOML file, reads it back and replaces the output only if that gives the description back. The same description always gives the same bytes. `dump` prints a plugin as JSON in the same shape as the TOML, with numbers in decimal; it fails on any file `build` could not have written. Exit statuses: 0 on success, 1 on invalid input (the message names the TOML key or the file offset), 2 on bad usage.
+
+```toml
+masters = ["Skyrim.esm"]   # required; the plugin's masters, in load order
+esl = false                # optional; true sets the ESL flag
+
+[[quests]]
+editor_id = "MyQuest"
+object_id = 0x800          # this plugin's object ID
+start_game_enabled = true  # optional, default false
+run_once = true            # optional, default false
+
+[[quests.scripts]]         # optional; a quest's scripts, in order
+name = "MyQuestScript"
+
+[[quests.scripts.properties]]  # optional; object properties only
+name = "Reward"
+form = { master = "Skyrim.esm", object_id = 0x00000F }  # a form in a master
+
+[[quests.scripts.properties]]
+name = "TestCell"
+form = { object_id = 0x801 }  # without master: a record of this plugin
+
+[[cells]]                  # an empty interior cell
+editor_id = "MyTestCell"
+object_id = 0x801
+```
+
+Rules `build` checks:
+
+- Object IDs are unique and from `0x800`, up to `0xFFF` in an ESL-flagged plugin and `0xFFFFFF` otherwise.
+- Editor IDs use letters, digits and `_`; script and property names are Papyrus identifiers. Editor IDs, master names, the scripts of a quest and the properties of a script are unique, ignoring case.
+- A property's form is a form in a listed master, or a quest or cell of this plugin.
+
+#### Compiled scripts: `normalize_pex.py`
+
+```sh
+python3 lib/skyrim-mod-toolchain/scripts/normalize_pex.py Scripts/*.pex
+```
+
+Rewrites each `.pex` in place with the compile time and the source's modification time zeroed and the user and machine names emptied, so a recompile gives the same bytes and no personal names are committed. It checks every file before changing any. Exit statuses: 0 on success, 1 if a file can't be read or is not a `.pex`, 2 on bad usage.
+
+#### Papyrus compile: `papyrus.sh`
+
+```sh
+SKYRIM_DIR=<Skyrim Special Edition folder> \
+PROTON_DIR=<Steam>/steamapps/common/Proton\ -\ Experimental/files \
+  lib/skyrim-mod-toolchain/scripts/papyrus.sh <source-dir> <output-dir> [<import-dir>...]
+```
+
+Compiles every `.psc` in the source dir with the Creation Kit's compiler under Proton's Wine, normalizes the output with `normalize_pex.py` and moves the `.pex` into the output dir, only if the compiler reports every script compiled. It needs the Creation Kit installed in `SKYRIM_DIR` (`Papyrus Compiler/` and the script sources in `Data/Source/Scripts/`) and only reads that folder; it refuses an output dir inside it. The compiler imports the source dir, then the import dirs in order, then the game's sources. The Wine prefix and the last compile's log are kept in `${XDG_CACHE_HOME:-~/.cache}/skyrim-mod-toolchain/papyrus/`. Exit statuses: 0 when every script compiled, 1 on a failed compile or a missing input, 2 on bad usage.
+
+CI can't run the compiler, so commit the normalized `.pex` along with its sources.
+
 ## Steam Deck
 
 Run setup inside an Ubuntu 24.04 distrobox, not on SteamOS itself (from your project, as in [Setup](#setup)):
