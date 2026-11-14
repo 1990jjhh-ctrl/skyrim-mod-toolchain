@@ -102,6 +102,14 @@ Rules `build` checks:
 - Editor IDs use letters, digits and `_`; script and property names are Papyrus identifiers. Editor IDs, master names, the scripts of a quest and the properties of a script are unique, ignoring case.
 - A property's form is a form in a listed master, or a quest or cell of this plugin.
 
+#### Compiled scripts: `normalize_pex.py`
+
+```sh
+python3 lib/skyrim-mod-toolchain/scripts/normalize_pex.py Scripts/*.pex
+```
+
+Rewrites each `.pex` in place with the compile time and the source's modification time zeroed and the user and machine names emptied, so a recompile gives the same bytes and no personal names are committed. It checks every file before changing any. Exit statuses: 0 on success, 1 if a file can't be read or is not a `.pex`, 2 on bad usage.
+
 ## Steam Deck
 
 Run setup inside an Ubuntu 24.04 distrobox, not on SteamOS itself (from your project, as in [Setup](#setup)):
