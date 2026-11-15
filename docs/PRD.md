@@ -1,6 +1,6 @@
 # skyrim-mod-toolchain — Product Requirements Document
 
-**Status:** Approved · **Author:** Joel Hirsbrunner · **Date:** 2026-11-07, amended 2026-11-14
+**Status:** Approved · **Author:** Joel Hirsbrunner · **Date:** 2026-11-07, amended 2026-11-14 and 2026-11-15
 
 ## 1. Summary
 
@@ -103,7 +103,7 @@ Key scenarios:
 | R14 | Setup shall support native unit-test prerequisites (host C++ compiler, Python) as an option for projects that need them. | Should |
 | R15 | The README shall document running setup inside an Ubuntu distrobox on SteamOS. | Should |
 | R16 | The README shall document how to start a new SKSE plugin project on the toolchain. | Could |
-| R17 | The toolchain shall provide a plugin writer, using only the Python standard library, that builds an `.esp` from a TOML description and dumps an `.esp` as JSON. It shall support a list of masters, plain or ESL-flagged plugins, quests with Start Game Enabled and Run Once flags and scripts with object properties (a form in a master or in the plugin itself), and empty interior cells. | Must |
+| R17 | The toolchain shall provide a plugin writer, using only the Python standard library, that builds an `.esp` from a TOML description and dumps an `.esp` as JSON. It shall support a list of masters, plain or ESL-flagged plugins, quests with Start Game Enabled and Run Once flags, scripts with object properties (a form in a master or in the plugin itself), and reference aliases forced to a reference in a master, with their own scripts, and empty interior cells. | Must |
 | R18 | The plugin writer shall give the same bytes for the same description, shall read every file it writes back strictly before reporting success, and its dump shall reject any file it could not have written instead of printing part of it. It shall exit 0 on success, 1 on invalid input with a message naming the TOML key or file offset, and 2 on bad usage. | Must |
 | R19 | The toolchain shall provide a `.pex` normalizer that zeroes the compile and source modification times and empties the user and machine names, so a recompile gives the same bytes and no personal names are committed. | Must |
 | R20 | The toolchain shall provide a script that compiles a folder of Papyrus sources with the Creation Kit's compiler under Proton's Wine and normalizes the output. It shall keep its Wine prefix outside the game directory and outside the project's tracked files, write nothing into the game directory, and fail unless the compiler reports every script compiled. | Must |
@@ -132,12 +132,7 @@ Key scenarios:
 
 ## 9. Open questions
 
-Open:
-
-- **Should the plugin writer also cover beyond-mastery's MCM plugin** (a
-  quest alias forced to a reference, with its own script), so beyond-mastery
-  can drop its copies of the mod-file tools? R17 lists only what skyrim-mcp
-  needs.
+Open: none.
 
 Resolved questions and their answers:
 
@@ -160,6 +155,10 @@ Resolved questions and their answers:
    submodule (`uses: ./lib/skyrim-mod-toolchain/.github/actions/setup`), not by
    tag. The action then always matches the submodule pin, so there is one
    thing to bump.
+5. **Should the plugin writer also cover beyond-mastery's MCM plugin** (a
+   quest alias forced to a reference, with its own script), so beyond-mastery
+   can drop its copies of the mod-file tools? Yes (decided 2026-11-15): R17
+   covers reference aliases forced to a reference, with alias scripts.
 
 ## 10. Milestones
 
