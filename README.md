@@ -91,6 +91,13 @@ form = { master = "Skyrim.esm", object_id = 0x00000F }  # a form in a master
 name = "TestCell"
 form = { object_id = 0x801 }  # without master: a record of this plugin
 
+[[quests.aliases]]         # optional; reference aliases, alias IDs 0, 1, ... in order
+name = "PlayerAlias"
+forced_ref = { master = "Skyrim.esm", object_id = 0x14 }  # the player
+
+[[quests.aliases.scripts]] # optional; the alias's scripts, properties as above
+name = "MyPlayerAliasScript"
+
 [[cells]]                  # an empty interior cell
 editor_id = "MyTestCell"
 object_id = 0x801
@@ -99,8 +106,9 @@ object_id = 0x801
 Rules `build` checks:
 
 - Object IDs are unique and from `0x800`, up to `0xFFF` in an ESL-flagged plugin and `0xFFFFFF` otherwise.
-- Editor IDs use letters, digits and `_`; script and property names are Papyrus identifiers. Editor IDs, master names, the scripts of a quest and the properties of a script are unique, ignoring case.
+- Editor IDs use letters, digits and `_`; script, property and alias names are Papyrus identifiers. Editor IDs, master names, the scripts of a quest or an alias, the aliases of a quest and the properties of a script are unique, ignoring case.
 - A property's form is a form in a listed master, or a quest or cell of this plugin.
+- An alias's forced reference is in a listed master; the plugin has no references of its own.
 
 #### Compiled scripts: `normalize_pex.py`
 

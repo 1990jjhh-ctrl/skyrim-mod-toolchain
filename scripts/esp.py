@@ -18,8 +18,9 @@ same bytes, so a field it doesn't read can't hide in a dump.
 
 The layouts follow UESP's "Skyrim Mod:Mod File Format" pages (record, group
 and field headers; TES4; QUST; CELL; VMAD Field). The VMAD property layout,
-the quest fields and the interior cell groups were checked against released
-plugins (SkyUI_SE.esp, beyond-mastery's BeyondMastery.esp and a player home).
+the quest fields, the reference aliases and the interior cell groups were
+checked against released plugins (SkyUI_SE.esp, beyond-mastery's
+BeyondMastery.esp and a player home).
 
 Exit status: 0 on success, 1 on invalid input (the message names the TOML key
 or the file offset), 2 on bad usage.
@@ -94,12 +95,22 @@ class Script:
 
 
 @dataclasses.dataclass(frozen=True)
+class Alias:
+    """A reference alias forced to a reference; its alias ID is its index in the quest."""
+
+    name: str
+    forced_ref: FormRef
+    scripts: tuple[Script, ...] = ()
+
+
+@dataclasses.dataclass(frozen=True)
 class Quest:
     editor_id: str
     object_id: int
     start_game_enabled: bool = False
     run_once: bool = False
     scripts: tuple[Script, ...] = ()
+    aliases: tuple[Alias, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -214,6 +225,16 @@ def _script_from_toml(table: _Table) -> Script:
     return script
 
 
+def _alias_from_toml(table: _Table) -> Alias:
+    alias = Alias(
+        name=table.take("name", str),
+        forced_ref=_form_from_toml(table.table("forced_ref")),
+        scripts=tuple(_script_from_toml(t) for t in table.tables("scripts")),
+    )
+    table.close()
+    return alias
+
+
 def _quest_from_toml(table: _Table) -> Quest:
     quest = Quest(
         editor_id=table.take("editor_id", str),
@@ -221,6 +242,7 @@ def _quest_from_toml(table: _Table) -> Quest:
         start_game_enabled=table.take("start_game_enabled", bool, False),
         run_once=table.take("run_once", bool, False),
         scripts=tuple(_script_from_toml(t) for t in table.tables("scripts")),
+        aliases=tuple(_alias_from_toml(t) for t in table.tables("aliases")),
     )
     table.close()
     return quest
@@ -279,10 +301,10 @@ def _check_form(form: FormRef, plugin: Plugin, own_ids: set[int], path: str) -> 
         raise EspError(f"{path}.object_id: {form.object_id:#x} is out of range")
 
 
-def _check_scripts(quest: Quest, path: str, plugin: Plugin, own_ids: set[int]) -> None:
-    scripts = [(f"{path}.scripts[{i}].name", s.name) for i, s in enumerate(quest.scripts)]
-    _check_unique(scripts, "script")
-    for i, script in enumerate(quest.scripts):
+def _check_scripts(scripts: tuple[Script, ...], path: str, plugin: Plugin, own_ids: set[int]) -> None:
+    """Checks the scripts of a quest or an alias; path is the quest's or the alias's key."""
+    _check_unique([(f"{path}.scripts[{i}].name", s.name) for i, s in enumerate(scripts)], "script")
+    for i, script in enumerate(scripts):
         script_path = f"{path}.scripts[{i}]"
         _check_name(script.name, IDENTIFIER, f"{script_path}.name", "script name")
         names = [(f"{script_path}.properties[{j}].name", p.name) for j, p in enumerate(script.properties)]
@@ -291,6 +313,18 @@ def _check_scripts(quest: Quest, path: str, plugin: Plugin, own_ids: set[int]) -
             prop_path = f"{script_path}.properties[{j}]"
             _check_name(prop.name, IDENTIFIER, f"{prop_path}.name", "property name")
             _check_form(prop.form, plugin, own_ids, f"{prop_path}.form")
+
+
+def _check_aliases(quest: Quest, path: str, plugin: Plugin, own_ids: set[int]) -> None:
+    _check_unique([(f"{path}.aliases[{i}].name", a.name) for i, a in enumerate(quest.aliases)], "alias")
+    for i, alias in enumerate(quest.aliases):
+        alias_path = f"{path}.aliases[{i}]"
+        _check_name(alias.name, IDENTIFIER, f"{alias_path}.name", "alias name")
+        # The plugin's own records are quests and cells, never references.
+        if alias.forced_ref.master is None:
+            raise EspError(f"{alias_path}.forced_ref.master: missing, the reference must be in a master")
+        _check_form(alias.forced_ref, plugin, own_ids, f"{alias_path}.forced_ref")
+        _check_scripts(alias.scripts, alias_path, plugin, own_ids)
 
 
 def validate(plugin: Plugin) -> None:
@@ -315,7 +349,8 @@ def validate(plugin: Plugin) -> None:
 
     own_ids = {record.object_id for _, record in records}
     for i, quest in enumerate(plugin.quests):
-        _check_scripts(quest, f"quests[{i}]", plugin, own_ids)
+        _check_scripts(quest.scripts, f"quests[{i}]", plugin, own_ids)
+        _check_aliases(quest, f"quests[{i}]", plugin, own_ids)
 
 
 # --- Writing --------------------------------------------------------------------
@@ -360,28 +395,58 @@ def _group(label: bytes, group_type: int, children: list[bytes]) -> bytes:
     return b"GRUP" + header + data
 
 
-def _vmad(plugin: Plugin, quest: Quest) -> bytes:
-    out = struct.pack("<hhH", VMAD_VERSION, VMAD_OBJ_FORMAT, len(quest.scripts))
-    for script in quest.scripts:
+def _scripts(plugin: Plugin, scripts: tuple[Script, ...]) -> bytes:
+    """A script list as the primary section and each alias have it: version, format, scripts."""
+    out = struct.pack("<hhH", VMAD_VERSION, VMAD_OBJ_FORMAT, len(scripts))
+    for script in scripts:
         out += _wstring(script.name) + struct.pack("<BH", SCRIPT_LOCAL, len(script.properties))
         for prop in script.properties:
             out += _wstring(prop.name) + struct.pack("<BB", PROPERTY_OBJECT, PROPERTY_EDITED)
             out += struct.pack("<HhI", 0, NO_ALIAS, _form_id(plugin, prop.form))
-    # Quest fragments: version, no fragments, no fragment script, no aliases.
-    return out + struct.pack("<bH", QUEST_FRAGMENTS_VERSION, 0) + _wstring("") + struct.pack("<H", 0)
+    return out
+
+
+def _vmad(plugin: Plugin, quest: Quest) -> bytes:
+    # Quest fragments: version, no fragments, no fragment script.
+    out = _scripts(plugin, quest.scripts) + struct.pack("<bH", QUEST_FRAGMENTS_VERSION, 0) + _wstring("")
+    # Only aliases with scripts are listed, as the Creation Kit writes them.
+    scripted = [(alias_id, a) for alias_id, a in enumerate(quest.aliases) if a.scripts]
+    out += struct.pack("<H", len(scripted))
+    quest_form_id = _form_id(plugin, FormRef(quest.object_id))
+    for alias_id, alias in scripted:
+        # The object in format 2: unused, the alias ID, the quest that owns the alias.
+        out += struct.pack("<HhI", 0, alias_id, quest_form_id) + _scripts(plugin, alias.scripts)
+    return out
+
+
+def _alias(plugin: Plugin, alias_id: int, alias: Alias) -> list[bytes]:
+    return [
+        _field(b"ALST", struct.pack("<I", alias_id)),
+        _field(b"ALID", _zstring(alias.name)),
+        _field(b"FNAM", struct.pack("<I", 0)),  # no alias flags
+        _field(b"ALFR", struct.pack("<I", _form_id(plugin, alias.forced_ref))),
+        _field(b"VTCK", struct.pack("<I", 0)),  # no voice types
+        _field(b"ALED", b""),  # end of the alias
+    ]
+
+
+def _has_vmad(quest: Quest) -> bool:
+    return bool(quest.scripts) or any(a.scripts for a in quest.aliases)
 
 
 def _quest(plugin: Plugin, quest: Quest) -> bytes:
     flags = (START_GAME_ENABLED if quest.start_game_enabled else 0) | (RUN_ONCE if quest.run_once else 0)
     fields = [_field(b"EDID", _zstring(quest.editor_id))]
-    if quest.scripts:
+    if _has_vmad(quest):
         fields.append(_field(b"VMAD", _vmad(plugin, quest)))
     fields += [
         # flags, priority, unknown, unknown int32, quest type 0 (none)
         _field(b"DNAM", struct.pack("<HBBiI", flags, 0, 0, 0, 0)),
         _field(b"NEXT", b""),
-        _field(b"ANAM", struct.pack("<I", 0)),  # next alias ID: no aliases
+        _field(b"ANAM", struct.pack("<I", len(quest.aliases))),  # the next alias ID
     ]
+    for alias_id, alias in enumerate(quest.aliases):
+        fields += _alias(plugin, alias_id, alias)
     return _record(b"QUST", 0, _form_id(plugin, FormRef(quest.object_id)), fields)
 
 
@@ -570,7 +635,7 @@ def _read_property(r: _Reader, masters: tuple[str, ...]) -> Property:
     return Property(name, _form_ref(form_id, masters, r, start))
 
 
-def _read_vmad(r: _Reader, masters: tuple[str, ...]) -> tuple[Script, ...]:
+def _read_scripts(r: _Reader, masters: tuple[str, ...]) -> tuple[Script, ...]:
     start = r.pos
     version, obj_format, count = r.unpack("<hhH")
     if (version, obj_format) != (VMAD_VERSION, VMAD_OBJ_FORMAT):
@@ -584,12 +649,53 @@ def _read_vmad(r: _Reader, masters: tuple[str, ...]) -> tuple[Script, ...]:
     return tuple(scripts)
 
 
+def _read_vmad(r: _Reader, masters: tuple[str, ...]) -> tuple[tuple[Script, ...], dict[int, tuple[Script, ...]]]:
+    """The quest's scripts and the scripts of each alias, by alias ID."""
+    scripts = _read_scripts(r, masters)
+    r.unpack("<bH")  # fragments version and count; encode() checks them
+    r.wstring()
+    alias_scripts: dict[int, tuple[Script, ...]] = {}
+    (count,) = r.unpack("<H")
+    for _ in range(count):
+        start = r.pos
+        _, alias_id, _ = r.unpack("<HhI")
+        if alias_id in alias_scripts:
+            raise r.fail(f"alias {alias_id} listed twice", start)
+        alias_scripts[alias_id] = _read_scripts(r, masters)
+    return scripts, alias_scripts
+
+
+def _read_aliases(record: _Record, masters: tuple[str, ...], r: _Reader, offset: int) -> list[tuple[int, Alias]]:
+    """The quest's aliases with their alias IDs, without scripts."""
+    aliases: list[tuple[int, Alias]] = []
+    for kind, data in record.fields:
+        if kind == b"ALST":
+            (alias_id,) = data.unpack("<I")
+            aliases.append((alias_id, Alias("", FormRef(0))))
+        elif kind in (b"ALID", b"ALFR") and not aliases:
+            raise r.fail(f"{kind.decode()} field outside an alias", offset)
+        elif kind == b"ALID":
+            alias_id, alias = aliases[-1]
+            aliases[-1] = (alias_id, dataclasses.replace(alias, name=data.zstring()))
+        elif kind == b"ALFR":
+            alias_id, alias = aliases[-1]
+            (form_id,) = data.unpack("<I")
+            forced_ref = _form_ref(form_id, masters, data, data.pos - 4)
+            aliases[-1] = (alias_id, dataclasses.replace(alias, forced_ref=forced_ref))
+    return aliases
+
+
 def _read_quest(r: _Reader, masters: tuple[str, ...]) -> Quest:
     start = r.pos
     record = _read_record(r, b"QUST")
-    scripts = ()
+    scripts: tuple[Script, ...] = ()
+    alias_scripts: dict[int, tuple[Script, ...]] = {}
     if record.has(b"VMAD"):
-        scripts = _read_vmad(record.field(b"VMAD", r, start), masters)
+        scripts, alias_scripts = _read_vmad(record.field(b"VMAD", r, start), masters)
+    aliases = _read_aliases(record, masters, r, start)
+    unknown = set(alias_scripts) - {alias_id for alias_id, _ in aliases}
+    if unknown:
+        raise r.fail(f"VMAD has scripts for alias {min(unknown)}, which the quest lacks", start)
     (flags,) = record.field(b"DNAM", r, start).unpack("<H")
     return Quest(
         editor_id=record.field(b"EDID", r, start).zstring(),
@@ -597,6 +703,7 @@ def _read_quest(r: _Reader, masters: tuple[str, ...]) -> Quest:
         start_game_enabled=bool(flags & START_GAME_ENABLED),
         run_once=bool(flags & RUN_ONCE),
         scripts=scripts,
+        aliases=tuple(dataclasses.replace(a, scripts=alias_scripts.get(i, ())) for i, a in aliases),
     )
 
 
@@ -669,12 +776,13 @@ def to_json(plugin: Plugin) -> dict[str, Any]:
     """The plugin as the JSON dump prints it: the TOML schema's shape."""
     # asdict gives plain values; a form in this plugin has no master key, as in TOML.
     data = dataclasses.asdict(plugin)
-    forms = [
-        prop["form"]
+    scripts = [
+        script
         for quest in data["quests"]
-        for script in quest["scripts"]
-        for prop in script["properties"]
+        for owner in (quest, *quest["aliases"])
+        for script in owner["scripts"]
     ]
+    forms = [prop["form"] for script in scripts for prop in script["properties"]]
     for form in forms:
         if form["master"] is None:
             del form["master"]
